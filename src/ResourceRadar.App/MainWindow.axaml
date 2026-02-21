@@ -1,0 +1,133 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.Avalonia;assembly=LiveChartsCore.SkiaSharpView.Avalonia"
+        x:Class="ResourceRadar.App.MainWindow"
+        x:Name="Root"
+        mc:Ignorable="d"
+        Title="ResourceRadar"
+        Width="1320"
+        Height="860"
+        MinWidth="820"
+        MinHeight="620">
+  <Grid RowDefinitions="Auto,*" Margin="20">
+    <StackPanel Spacing="4">
+      <TextBlock Text="ResourceRadar" FontSize="28" FontWeight="Bold" Foreground="#F0F6FC" />
+      <TextBlock Text="Real-time CPU, memory, network, and process telemetry" Foreground="#8B949E" />
+      <TextBlock Text="{Binding StatusMessage}" Foreground="#FF7B72" IsVisible="{Binding HasStatusMessage}" Margin="0,6,0,0" />
+    </StackPanel>
+
+    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Margin="0,16,0,0">
+      <StackPanel>
+        <WrapPanel Orientation="Horizontal">
+          <Border Classes="card" Width="360" MinWidth="320" Height="300">
+            <Grid RowDefinitions="Auto,Auto,*">
+              <TextBlock Classes="title" Text="CPU Usage" />
+              <TextBlock Grid.Row="1" Classes="metric" Text="{Binding CpuUsageText}" Margin="0,8,0,8" />
+              <lvc:CartesianChart Grid.Row="2"
+                                  Series="{Binding CpuSeries}"
+                                  XAxes="{Binding CpuXAxes}"
+                                  YAxes="{Binding CpuYAxes}"
+                                  LegendPosition="Hidden" />
+            </Grid>
+          </Border>
+
+          <Border Classes="card" Width="360" MinWidth="320" Height="300">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
+              <TextBlock Classes="title" Text="Memory Usage" />
+              <TextBlock Grid.Row="1" Classes="metric" Text="{Binding MemoryUsageText}" Margin="0,8,0,8" />
+              <ProgressBar Grid.Row="2" Minimum="0" Maximum="100" Value="{Binding MemoryUsagePercent}" Height="10" Margin="0,0,0,8" />
+              <TextBlock Grid.Row="3" Text="{Binding MemoryBreakdownText}" Foreground="#8B949E" FontSize="13" Margin="0,0,0,8" />
+              <lvc:CartesianChart Grid.Row="4"
+                                  Series="{Binding MemorySeries}"
+                                  XAxes="{Binding MemoryXAxes}"
+                                  YAxes="{Binding MemoryYAxes}"
+                                  LegendPosition="Hidden" />
+            </Grid>
+          </Border>
+
+          <Border Classes="card" Width="360" MinWidth="320" Height="300">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+              <TextBlock Classes="title" Text="Network Traffic" />
+              <TextBlock Grid.Row="1" Text="{Binding NetworkSpeedText}" FontSize="24" FontWeight="Bold" Foreground="#58A6FF" Margin="0,8,0,8" />
+              <TextBlock Grid.Row="2" Text="{Binding NetworkTotalsText}" Foreground="#8B949E" FontSize="13" Margin="0,0,0,8" />
+              <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="16" Margin="0,0,0,8">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Border Width="14" Height="4" CornerRadius="2" Background="#388BFD" VerticalAlignment="Center" />
+                  <TextBlock Text="Download" Foreground="#C9D1D9" FontSize="12" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Border Width="14" Height="4" CornerRadius="2" Background="#F8812F" VerticalAlignment="Center" />
+                  <TextBlock Text="Upload" Foreground="#C9D1D9" FontSize="12" VerticalAlignment="Center" />
+                </StackPanel>
+              </StackPanel>
+              <lvc:CartesianChart Grid.Row="4"
+                                  Series="{Binding NetworkSeries}"
+                                  XAxes="{Binding NetworkXAxes}"
+                                  YAxes="{Binding NetworkYAxes}"
+                                  LegendPosition="Hidden" />
+              <TextBlock Grid.Row="5"
+                         Text="{Binding NetworkInterfacesText}"
+                         Foreground="#8B949E"
+                         FontSize="12"
+                         Margin="0,8,0,0" />
+            </Grid>
+          </Border>
+        </WrapPanel>
+
+        <Border Classes="card" Width="1120" MinWidth="740" Height="420">
+          <Grid RowDefinitions="Auto,Auto,*,Auto">
+            <TextBlock Classes="title" Text="Process List" />
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,8,0,8">
+              <Button Content="Sort: Name" Command="{Binding SortByNameCommand}" />
+              <Button Content="Sort: CPU" Command="{Binding SortByCpuCommand}" />
+              <Button Content="Sort: Memory" Command="{Binding SortByMemoryCommand}" />
+              <Button Content="Sort: Traffic" Command="{Binding SortByTrafficCommand}" />
+              <TextBlock Text="{Binding ProcessSummaryText}" Foreground="#8B949E" VerticalAlignment="Center" Margin="8,0,0,0" />
+            </StackPanel>
+
+            <Grid Grid.Row="2" RowDefinitions="Auto,*">
+              <Grid ColumnDefinitions="2.8*,1.1*,1.5*,1.1*,Auto" Margin="0,0,0,6">
+                <TextBlock Text="Process" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="1" Text="CPU %" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="2" Text="Memory" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="3" Text="Traffic" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="4" Text="Action" FontWeight="SemiBold" />
+              </Grid>
+
+              <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Processes}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Grid ColumnDefinitions="2.8*,1.1*,1.5*,1.1*,Auto" Margin="0,0,0,6">
+                        <StackPanel>
+                          <TextBlock Text="{Binding ProcessName}" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding ProcessId, StringFormat='PID: {0}'}" FontSize="11" Foreground="#8B949E" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Text="{Binding CpuText}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="{Binding MemoryText}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="3" Text="{Binding TrafficText}" VerticalAlignment="Center" />
+                        <Button Grid.Column="4"
+                                Content="End"
+                                Padding="10,2"
+                                Command="{Binding $parent[Window].DataContext.EndProcessCommand}"
+                                CommandParameter="{Binding ProcessId}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Grid>
+
+            <TextBlock Grid.Row="3"
+                       Text="Traffic sort uses active network connection count. Ending a process may fail without permission or for protected system processes."
+                       Foreground="#8B949E"
+                       FontSize="11"
+                       Margin="0,8,0,0" />
+          </Grid>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</Window>

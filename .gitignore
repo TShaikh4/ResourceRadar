@@ -1,0 +1,14 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.swp
+.DS_Store
+
+# Rider
+*.DotSettings.user
+
+# Avalonia build artifacts
+src/**/Generated/
