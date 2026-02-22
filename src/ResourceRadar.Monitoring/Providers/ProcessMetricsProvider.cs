@@ -7,10 +7,13 @@ namespace ResourceRadar.Monitoring.Providers;
 public sealed class ProcessMetricsProvider : IProcessMetricsProvider
 {
     private static readonly TimeSpan ConnectionCountRefreshInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan ProcessNameRefreshInterval = TimeSpan.FromSeconds(10);
 
     private readonly Dictionary<int, TimeSpan> _previousCpuByPid = new();
     private Dictionary<int, int> _cachedConnectionCountsByPid = [];
     private DateTimeOffset _cachedConnectionCountsTimestamp = DateTimeOffset.MinValue;
+    private Dictionary<int, string> _cachedDisplayNamesByPid = [];
+    private DateTimeOffset _cachedDisplayNamesTimestamp = DateTimeOffset.MinValue;
     private DateTimeOffset? _previousTimestamp;
 
     public ValueTask<ProcessSample> GetProcessSampleAsync(CancellationToken cancellationToken)
@@ -19,6 +22,7 @@ public sealed class ProcessMetricsProvider : IProcessMetricsProvider
 
         var now = DateTimeOffset.UtcNow;
         var connectionCountsByPid = GetConnectionCounts(now);
+        var displayNamesByPid = GetProcessDisplayNames(now);
         var elapsed = _previousTimestamp.HasValue
             ? now - _previousTimestamp.Value
             : TimeSpan.Zero;
@@ -33,6 +37,11 @@ public sealed class ProcessMetricsProvider : IProcessMetricsProvider
                 if (!TryReadProcess(process, out var pid, out var name, out var cpuTime, out var memoryBytes))
                 {
                     continue;
+                }
+
+                if (displayNamesByPid.TryGetValue(pid, out var displayName) && !string.IsNullOrWhiteSpace(displayName))
+                {
+                    name = displayName;
                 }
 
                 var cpuPercent = 0.0;
@@ -84,6 +93,23 @@ public sealed class ProcessMetricsProvider : IProcessMetricsProvider
         return _cachedConnectionCountsByPid;
     }
 
+    private IReadOnlyDictionary<int, string> GetProcessDisplayNames(DateTimeOffset now)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return _cachedDisplayNamesByPid;
+        }
+
+        if ((now - _cachedDisplayNamesTimestamp) < ProcessNameRefreshInterval)
+        {
+            return _cachedDisplayNamesByPid;
+        }
+
+        _cachedDisplayNamesByPid = ReadUnixDisplayNames();
+        _cachedDisplayNamesTimestamp = now;
+        return _cachedDisplayNamesByPid;
+    }
+
     private static Dictionary<int, int> ReadUnixConnectionCounts()
     {
         // lsof returns network handles grouped by process; counting those handles gives a traffic activity proxy.
@@ -126,6 +152,43 @@ public sealed class ProcessMetricsProvider : IProcessMetricsProvider
         ParseWindowsNetstatOutput(RunCommand("netstat", "-ano -p tcp"), counts);
         ParseWindowsNetstatOutput(RunCommand("netstat", "-ano -p udp"), counts);
         return counts;
+    }
+
+    private static Dictionary<int, string> ReadUnixDisplayNames()
+    {
+        var output = RunCommand("ps", "-axww -o pid=,command=");
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return [];
+        }
+
+        var namesByPid = new Dictionary<int, string>();
+
+        foreach (var rawLine in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var splitIndex = rawLine.IndexOf(' ');
+            if (splitIndex <= 0)
+            {
+                continue;
+            }
+
+            var pidText = rawLine[..splitIndex].Trim();
+            if (!int.TryParse(pidText, out var pid) || pid <= 0)
+            {
+                continue;
+            }
+
+            var commandLine = rawLine[(splitIndex + 1)..].Trim();
+            var displayName = DeriveDisplayNameFromCommandLine(commandLine);
+            if (string.IsNullOrWhiteSpace(displayName))
+            {
+                continue;
+            }
+
+            namesByPid[pid] = displayName;
+        }
+
+        return namesByPid;
     }
 
     private static void ParseWindowsNetstatOutput(string output, Dictionary<int, int> counts)
@@ -200,6 +263,99 @@ public sealed class ProcessMetricsProvider : IProcessMetricsProvider
         {
             return string.Empty;
         }
+    }
+
+    private static string DeriveDisplayNameFromCommandLine(string commandLine)
+    {
+        if (string.IsNullOrWhiteSpace(commandLine))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = commandLine.Trim();
+
+        const string appMarker = ".app/Contents/MacOS/";
+        var appMarkerIndex = trimmed.IndexOf(appMarker, StringComparison.OrdinalIgnoreCase);
+        if (appMarkerIndex >= 0)
+        {
+            var executableSegment = trimmed[(appMarkerIndex + appMarker.Length)..];
+            var argumentStart = executableSegment.IndexOf(" --", StringComparison.Ordinal);
+            return argumentStart > 0
+                ? executableSegment[..argumentStart].Trim()
+                : executableSegment.Trim();
+        }
+
+        var firstArgument = ExtractFirstArgument(trimmed);
+        if (string.IsNullOrWhiteSpace(firstArgument))
+        {
+            return string.Empty;
+        }
+
+        if (Path.IsPathRooted(firstArgument) || firstArgument.StartsWith("./", StringComparison.Ordinal))
+        {
+            var fromPath = Path.GetFileName(firstArgument);
+            if (!string.IsNullOrWhiteSpace(fromPath))
+            {
+                return fromPath;
+            }
+        }
+
+        return firstArgument;
+    }
+
+    private static string ExtractFirstArgument(string commandLine)
+    {
+        if (string.IsNullOrWhiteSpace(commandLine))
+        {
+            return string.Empty;
+        }
+
+        var inQuotes = false;
+        var quoteChar = '\0';
+        var escaped = false;
+        var endIndex = commandLine.Length;
+
+        for (var index = 0; index < commandLine.Length; index++)
+        {
+            var character = commandLine[index];
+
+            if (escaped)
+            {
+                escaped = false;
+                continue;
+            }
+
+            if (character == '\\')
+            {
+                escaped = true;
+                continue;
+            }
+
+            if (inQuotes)
+            {
+                if (character == quoteChar)
+                {
+                    inQuotes = false;
+                }
+
+                continue;
+            }
+
+            if (character is '"' or '\'')
+            {
+                inQuotes = true;
+                quoteChar = character;
+                continue;
+            }
+
+            if (char.IsWhiteSpace(character))
+            {
+                endIndex = index;
+                break;
+            }
+        }
+
+        return commandLine[..endIndex].Trim('"', '\'');
     }
 
     private static bool TryReadProcess(

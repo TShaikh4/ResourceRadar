@@ -46,6 +46,9 @@ Traffic sorting is currently based on active network connection count per proces
 - `src/ResourceRadar.App`
   - Avalonia desktop app
   - MVVM view models and XAML UI
+- `src/ResourceRadar.Api`
+  - ASP.NET Core minimal API (portfolio backend surface)
+  - Exposes health and current metrics endpoints
 - `src/ResourceRadar.Monitoring`
   - Monitoring abstractions, models, providers, and poller
 - `ResourceRadar.sln`
@@ -55,9 +58,10 @@ Traffic sorting is currently based on active network connection count per proces
 
 ## Architecture summary
 
-ResourceRadar uses a two-project architecture:
+ResourceRadar uses a three-project architecture:
 
 - `ResourceRadar.App` handles rendering, user interactions, and view state.
+- `ResourceRadar.Api` exposes backend-style HTTP endpoints for health and metric snapshots.
 - `ResourceRadar.Monitoring` handles metric collection and process actions.
 
 `MetricsPoller` runs on a background timer and emits events for CPU, memory, network, and process samples. `MainWindowViewModel` receives these events, marshals updates to the UI thread, and updates chart/history collections.
@@ -80,6 +84,40 @@ dotnet build ResourceRadar.sln
 dotnet run --project src/ResourceRadar.App/ResourceRadar.App.csproj
 ```
 
+### Run API (local)
+
+```bash
+dotnet run --project src/ResourceRadar.Api/ResourceRadar.Api.csproj
+```
+
+By default it listens on local Kestrel URLs shown in console startup logs.
+
+If you want a fixed local URL:
+
+```bash
+dotnet run --project src/ResourceRadar.Api/ResourceRadar.Api.csproj --urls http://127.0.0.1:5188
+```
+
+### API endpoints
+
+- `GET /health`
+  - Returns service status and UTC timestamp
+- `GET /metrics/current`
+  - Returns one current snapshot of CPU, memory, and network metrics
+  - Uses the same monitoring providers as the desktop app
+
+### Swagger / OpenAPI
+
+- Swagger UI: `http://127.0.0.1:5188/swagger`
+- OpenAPI JSON: `http://127.0.0.1:5188/swagger/v1/swagger.json`
+
+Example calls:
+
+```bash
+curl http://127.0.0.1:5188/health
+curl http://127.0.0.1:5188/metrics/current
+```
+
 ## How it works
 
 ### Polling and update cadence
@@ -100,7 +138,7 @@ CPU and memory use OS-specific providers:
   - CPU: `/proc/stat` delta snapshots
   - Memory: `/proc/meminfo`
 - macOS
-  - CPU: `top -l 1 -n 0`
+  - CPU: native `host_processor_info` CPU ticks (per-core + total deltas)
   - Memory: `sysctl hw.memsize` + `vm_stat`
 
 Network and process metrics are collected with cross-platform APIs plus platform-aware command fallbacks where needed.
@@ -128,5 +166,3 @@ Network and process metrics are collected with cross-platform APIs plus platform
 - Disk I/O throughput and storage sensors
 - Historical export and snapshot persistence
 - Unit/integration test suite for parser/provider behavior
-
-

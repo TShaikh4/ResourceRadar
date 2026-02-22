@@ -88,7 +88,7 @@
             </StackPanel>
 
             <Grid Grid.Row="2" RowDefinitions="Auto,*">
-              <Grid ColumnDefinitions="2.8*,1.1*,1.5*,1.1*,Auto" Margin="0,0,0,6">
+              <Grid ColumnDefinitions="3.6*,0.9*,1.2*,0.9*,72" Margin="0,0,0,6">
                 <TextBlock Text="Process" FontWeight="SemiBold" />
                 <TextBlock Grid.Column="1" Text="CPU %" FontWeight="SemiBold" />
                 <TextBlock Grid.Column="2" Text="Memory" FontWeight="SemiBold" />
@@ -100,9 +100,11 @@
                 <ItemsControl ItemsSource="{Binding Processes}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                      <Grid ColumnDefinitions="2.8*,1.1*,1.5*,1.1*,Auto" Margin="0,0,0,6">
+                      <Grid ColumnDefinitions="3.6*,0.9*,1.2*,0.9*,72" Margin="0,0,0,6">
                         <StackPanel>
-                          <TextBlock Text="{Binding ProcessName}" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding ProcessName}"
+                                     TextTrimming="CharacterEllipsis"
+                                     ToolTip.Tip="{Binding ProcessName}" />
                           <TextBlock Text="{Binding ProcessId, StringFormat='PID: {0}'}" FontSize="11" Foreground="#8B949E" />
                         </StackPanel>
                         <TextBlock Grid.Column="1" Text="{Binding CpuText}" VerticalAlignment="Center" />

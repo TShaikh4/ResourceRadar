@@ -7,6 +7,7 @@ This document describes how ResourceRadar is structured, how telemetry flows fro
 ResourceRadar is a desktop dashboard with a layered architecture:
 
 - Presentation layer: Avalonia UI + MVVM (`src/ResourceRadar.App`)
+- API layer: ASP.NET Core minimal API (`src/ResourceRadar.Api`)
 - Monitoring layer: providers + poller + models (`src/ResourceRadar.Monitoring`)
 
 The app runs a background poll loop every second, collects samples, then updates UI-bound view state on the Avalonia UI thread.
@@ -18,6 +19,7 @@ flowchart LR
   C --> D["MainWindowViewModel\nEvent handlers + rolling buffers"]
   D --> E["Avalonia Views\nMainWindow.axaml\nLiveCharts2 + table bindings"]
   D --> F["ProcessControlService\nKill by PID"]
+  B --> G["ResourceRadar.Api\nGET /health\nGET /metrics/current"]
 ```
 
 ## 2) Project boundaries
@@ -38,6 +40,20 @@ Key files:
 - `src/ResourceRadar.App/ViewModels/MainWindowViewModel.cs`
 - `src/ResourceRadar.App/MainWindow.axaml`
 
+### `src/ResourceRadar.Api`
+
+Responsibilities:
+
+- Expose HTTP endpoints for portfolio backend skills
+- Publish OpenAPI metadata and interactive Swagger UI
+- Reuse monitoring providers from `ResourceRadar.Monitoring`
+- Return current telemetry snapshots without UI dependencies
+
+Key files:
+
+- `src/ResourceRadar.Api/Program.cs`
+- `src/ResourceRadar.Api/ResourceRadar.Api.csproj`
+
 ### `src/ResourceRadar.Monitoring`
 
 Responsibilities:
@@ -56,11 +72,19 @@ Key files:
 
 ## 3) Runtime data flow
 
+Desktop path:
+
 1. `ServiceRegistration` builds all providers and `MetricsPoller`.
 2. `MainWindowViewModel` subscribes to poller events and starts polling (`1s`).
 3. `MetricsPoller` collects CPU, memory, network, and process samples on a background thread.
 4. ViewModel handlers post updates onto `Dispatcher.UIThread`.
 5. Charts, labels, and process rows re-render via bindings.
+
+API path:
+
+1. `Program.cs` registers CPU, memory, and network providers as singletons.
+2. `GET /metrics/current` requests one sample from each provider.
+3. Samples are collected concurrently and returned as one JSON snapshot.
 
 ## 4) Polling model
 
@@ -79,7 +103,7 @@ This keeps long-running metric collection out of the UI thread and centralizes l
 
 - Windows: `PerformanceCounter` (`Processor`, `% Processor Time`)
 - Linux: `/proc/stat` parsed into snapshots and delta-based utilization
-- macOS: `top -l 1 -n 0` parsed from command output
+- macOS: native `host_processor_info` CPU state ticks and delta-based utilization
 
 ### Memory
 
@@ -172,4 +196,10 @@ To add a new sensor (example: GPU):
 dotnet restore ResourceRadar.sln
 dotnet build ResourceRadar.sln
 dotnet run --project src/ResourceRadar.App/ResourceRadar.App.csproj
+```
+
+Run API:
+
+```bash
+dotnet run --project src/ResourceRadar.Api/ResourceRadar.Api.csproj
 ```
